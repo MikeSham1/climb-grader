@@ -13,6 +13,19 @@ from PIL import Image
 
 from detector import is_climbing_wall
 from grader import V_GRADES, predict
+from holds import annotate, detect_holds
+
+
+# Cache the heavy per-image work so clicking the route picker (which reruns the
+# whole script) doesn't re-run CLIP or re-segment the photo every time.
+@st.cache_data(show_spinner=False)
+def cached_wall_check(image_bytes: bytes):
+    return is_climbing_wall(image_bytes)
+
+
+@st.cache_data(show_spinner=False)
+def cached_detect(image_bytes: bytes):
+    return detect_holds(image_bytes)
 
 st.set_page_config(
     page_title="Climb Route Grader",
@@ -52,13 +65,12 @@ if uploaded is None:
 image_bytes = uploaded.getvalue()
 image = Image.open(io.BytesIO(image_bytes))
 
-st.image(image, caption=uploaded.name, use_container_width=True)
-
 # Gate: only climbing-wall photos get graded.
 with st.spinner("Checking the photo…"):
-    check = is_climbing_wall(image_bytes)
+    check = cached_wall_check(image_bytes)
 
 if not check.is_wall:
+    st.image(image, caption=uploaded.name, use_container_width=True)
     st.error(
         "That doesn't look like a climbing wall. Upload a clear photo of a "
         "bouldering or rock-climbing wall and I'll grade the route.",
@@ -66,6 +78,43 @@ if not check.is_wall:
     )
     st.caption(f"Climbing-wall confidence: {check.confidence * 100:.0f}%")
     st.stop()
+
+# Stage A — find holds and group them by colour into candidate routes.
+with st.spinner("Finding holds…"):
+    detection = cached_detect(image_bytes)
+
+if not detection.routes:
+    st.image(image, caption=uploaded.name, use_container_width=True)
+    st.warning(
+        "Couldn't pick out any coloured holds. Try a closer, brighter, "
+        "straight-on photo of the wall.",
+        icon="🔍",
+    )
+    st.stop()
+
+# Each colour is a candidate route — let the climber pick the one they're on.
+colors = sorted(detection.routes, key=lambda c: -detection.routes[c].count)
+choice = st.radio(
+    "Route — pick the hold colour you're climbing",
+    ["All"] + colors,
+    horizontal=True,
+    format_func=lambda c: (
+        "All holds"
+        if c == "All"
+        else f"{c.title()} ({detection.routes[c].count})"
+    ),
+)
+highlight = None if choice == "All" else choice
+
+st.image(
+    annotate(image_bytes, detection, highlight),
+    caption=(
+        f"{len(detection.holds)} holds • {len(detection.routes)} colours"
+        if highlight is None
+        else f"{choice.title()} route • {detection.routes[choice].count} holds"
+    ),
+    use_container_width=True,
+)
 
 if not st.button("Grade this route", type="primary", use_container_width=True):
     st.stop()
