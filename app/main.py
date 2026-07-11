@@ -11,6 +11,7 @@ import io
 import streamlit as st
 from PIL import Image
 
+from detector import is_climbing_wall
 from grader import V_GRADES, predict
 
 st.set_page_config(
@@ -52,6 +53,19 @@ image_bytes = uploaded.getvalue()
 image = Image.open(io.BytesIO(image_bytes))
 
 st.image(image, caption=uploaded.name, use_container_width=True)
+
+# Gate: only climbing-wall photos get graded.
+with st.spinner("Checking the photo…"):
+    check = is_climbing_wall(image_bytes)
+
+if not check.is_wall:
+    st.error(
+        "That doesn't look like a climbing wall. Upload a clear photo of a "
+        "bouldering or rock-climbing wall and I'll grade the route.",
+        icon="🚫",
+    )
+    st.caption(f"Climbing-wall confidence: {check.confidence * 100:.0f}%")
+    st.stop()
 
 if not st.button("Grade this route", type="primary", use_container_width=True):
     st.stop()
