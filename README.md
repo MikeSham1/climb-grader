@@ -2,6 +2,9 @@
 
 Upload a photo of a bouldering wall → get a predicted V-grade.
 
+Goal is to help a climber figure out their strengths and create a proper rock wall grading system. This helps a user be able to figure out what do to max out their potential
+
+
 Photo-in / grade-out, built on the two-stage plan in `DESIGN.md`
 (perception → grading). This is the **first page**: a runnable Streamlit UI
 with a *stub* grader so the whole flow works before the PyTorch model exists.
