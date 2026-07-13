@@ -14,6 +14,7 @@ from PIL import Image
 from detector import is_climbing_wall
 from grader import V_GRADES, predict
 from holds import COLOR_RGB, annotate, detect_holds
+from preprocess import BadImage, normalize_image
 from skills import skills_for
 
 
@@ -188,7 +189,17 @@ if uploaded is None:
     )
     st.stop()
 
-image_bytes = uploaded.getvalue()
+# Normalise first: fix phone-photo rotation, flatten transparency, cap size —
+# so every stage below shares one clean, correctly-oriented image.
+try:
+    image_bytes = normalize_image(uploaded.getvalue())
+except BadImage:
+    st.error(
+        "Couldn't read that file as an image. Try a JPG, PNG, or WebP photo "
+        "of the wall.",
+        icon="🚫",
+    )
+    st.stop()
 image = Image.open(io.BytesIO(image_bytes))
 
 # Gate: only climbing-wall photos get graded.
